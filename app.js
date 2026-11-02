@@ -518,7 +518,28 @@ function render() {
     sc.scrollTop = S.events.length ? Math.max(0, gridTop + ui.agendaTarget * H + TOP - 4) : 0;
     ui.scrollHour = false;
   } else if (keep != null) sc.scrollTop = keep;
+  const dir = ui.slide, weekDir = ui.slideWeek;
+  ui.slide = 0;
+  ui.slideWeek = 0;
+  if (dir) main.querySelectorAll('.slidable').forEach(el => el.classList.add(dir > 0 ? 'in-next' : 'in-prev'));
+  if (weekDir) main.querySelectorAll('.slidable-week').forEach(el => el.classList.add(weekDir > 0 ? 'in-next' : 'in-prev'));
   document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === ui.tab));
+}
+
+/* ---------- Changement de jour (avec transition) ---------- */
+function dayDiff(a, b) { return Math.round((sod(b) - sod(a)) / 864e5); }
+function goAgenda(date) {
+  const old = ui.agendaDate, n = dayDiff(old, date);
+  ui.agendaDate = sod(date);
+  ui.slide = Math.sign(n);
+  ui.slideWeek = dkey(startOfWeek(old)) !== dkey(startOfWeek(date)) ? Math.sign(n) : 0;
+  ui.scrollHour = true;
+  render();
+}
+function goBilan(date) {
+  ui.slide = Math.sign(dayDiff(ui.bilanDate, date));
+  ui.bilanDate = sod(date);
+  render();
 }
 
 /* ---------- Agenda ---------- */
@@ -568,16 +589,16 @@ function renderAgenda() {
   let nav;
   if (week) {
     nav = `<div class="weeknav"><button data-act="agenda-shift" data-n="-7" aria-label="Semaine précédente">${icon('left')}</button>` +
-      `<b>${fmtShort(days[0])} – ${fmtShort(days[6])}</b><button data-act="agenda-shift" data-n="7" aria-label="Semaine suivante">${icon('right')}</button></div>` +
-      `<div class="weekhead">${days.map((x, i) => `<button class="${sameDay(x, t) ? 'today' : ''}" data-act="week-day" data-day="${dkey(x)}"><small>${LETTERS[i]}</small><b>${x.getDate()}</b></button>`).join('')}</div>`;
+      `<b class="slidable">${fmtShort(days[0])} – ${fmtShort(days[6])}</b><button data-act="agenda-shift" data-n="7" aria-label="Semaine suivante">${icon('right')}</button></div>` +
+      `<div class="weekhead slidable">${days.map((x, i) => `<button class="${sameDay(x, t) ? 'today' : ''}" data-act="week-day" data-day="${dkey(x)}"><small>${LETTERS[i]}</small><b>${x.getDate()}</b></button>`).join('')}</div>`;
   } else {
     const s = startOfWeek(d);
-    nav = `<div class="strip" data-swipe="agenda-week"><button class="chev" data-act="agenda-shift" data-n="-7" aria-label="Semaine précédente">${icon('left')}</button>` +
+    nav = `<div class="strip" data-swipe="agenda-week"><button class="chev" data-act="agenda-shift" data-n="-7" aria-label="Semaine précédente">${icon('left')}</button><div class="slide-days slidable-week">` +
       Array.from({ length: 7 }, (_, i) => {
         const x = addDays(s, i);
         return `<button class="day${sameDay(x, t) ? ' today' : ''}${sameDay(x, d) ? ' sel' : ''}" data-act="agenda-pick" data-day="${dkey(x)}"><small>${LETTERS[i]}</small><b>${x.getDate()}</b></button>`;
       }).join('') +
-      `<button class="chev" data-act="agenda-shift" data-n="7" aria-label="Semaine suivante">${icon('right')}</button></div>`;
+      `</div><button class="chev" data-act="agenda-shift" data-n="7" aria-label="Semaine suivante">${icon('right')}</button></div>`;
   }
   const extra = `<div class="monthrow"><div class="month"><b>${fmtMonthYear(d)}</b> <span>· sem. ${isoWeek(d)}</span></div>` +
     `<div class="seg"><button class="${week ? '' : 'on'}" data-act="agenda-mode" data-mode="day">Jour</button>` +
@@ -617,7 +638,7 @@ function renderAgenda() {
   ui.agendaTarget = target;
 
   return header('Agenda', right, extra) +
-    `<div class="scroll" data-swipe="${week ? 'agenda-week' : 'agenda-day'}">${body}${grid}${legend()}</div>`;
+    `<div class="scroll" data-swipe="${week ? 'agenda-week' : 'agenda-day'}"><div class="slidable">${body}${grid}${legend()}</div></div>`;
 }
 
 /* ---------- Fiche événement (créer / modifier) ---------- */
@@ -818,7 +839,7 @@ function renderBilan() {
   const s = summary(k, acts);
   const subtitle = [relDay(day), closedDay ? 'Clôturée' : null].filter(Boolean).join(' · ') || String(day.getFullYear());
   const nav = `<div class="daynav" data-swipe="bilan-day"><button data-act="bilan-shift" data-n="-1" aria-label="Jour précédent">${icon('left')}</button>` +
-    `<div data-act="bilan-today"><b>${fmtDayLong(day)}</b><span>${subtitle}</span></div>` +
+    `<div class="slidable" data-act="bilan-today"><b>${fmtDayLong(day)}</b><span>${subtitle}</span></div>` +
     `<button data-act="bilan-shift" data-n="1" aria-label="Jour suivant">${icon('right')}</button></div>`;
 
   let b = '';
@@ -864,7 +885,7 @@ function renderBilan() {
     }
   }
   b += `<p class="foot">Le score compare le temps réalisé au temps prévu pour tes activités (cours, révisions, business, sport, apprentissage, organisation). La routine et le sommeil n'y entrent pas.</p>`;
-  return header('Bilan du jour', settingsBtn(), nav) + `<div class="scroll"><div class="pad">${b}</div></div>`;
+  return header('Bilan du jour', settingsBtn(), nav) + `<div class="scroll" data-swipe="bilan-day"><div class="pad slidable">${b}</div></div>`;
 }
 function extraSheet() {
   const x = ui.extra;
@@ -1068,9 +1089,9 @@ const A = {
   'choose-cancel': (el, e) => { if ((e.target === el || el.tagName === 'BUTTON') && ui.chooseResolve) ui.chooseResolve(null); },
 
   // Agenda
-  'agenda-today': () => { ui.agendaDate = today(); ui.scrollHour = true; render(); },
-  'agenda-shift': el => { ui.agendaDate = addDays(ui.agendaDate, +el.dataset.n); ui.scrollHour = true; render(); },
-  'agenda-pick': el => { ui.agendaDate = parseKey(el.dataset.day); ui.scrollHour = true; render(); },
+  'agenda-today': () => goAgenda(today()),
+  'agenda-shift': el => goAgenda(addDays(ui.agendaDate, +el.dataset.n)),
+  'agenda-pick': el => goAgenda(parseKey(el.dataset.day)),
   'agenda-mode': el => { ui.agendaMode = el.dataset.mode; ui.scrollHour = true; render(); },
   'week-day': el => { ui.agendaDate = parseKey(el.dataset.day); ui.agendaMode = 'day'; ui.scrollHour = true; render(); },
   'open-occ': el => { const o = ui.occMap.get(el.dataset.id); if (o) openEvent(draftFromOcc(o)); },
@@ -1096,9 +1117,9 @@ const A = {
   'draft-delete': () => deleteDraft(),
 
   // Bilan
-  'bilan-shift': el => { ui.bilanDate = addDays(ui.bilanDate, +el.dataset.n); render(); },
-  'bilan-today': () => { ui.bilanDate = today(); render(); },
-  'bilan-goto': el => { ui.bilanDate = parseKey(el.dataset.day); render(); },
+  'bilan-shift': el => goBilan(addDays(ui.bilanDate, +el.dataset.n)),
+  'bilan-today': () => goBilan(today()),
+  'bilan-goto': el => goBilan(parseKey(el.dataset.day)),
   entry: el => {
     const k = dkey(ui.bilanDate), id = el.dataset.id, s = el.dataset.s;
     const a = dayActs(ui.bilanDate).find(x => x.id === id);
@@ -1254,24 +1275,54 @@ document.addEventListener('click', e => {
 document.addEventListener('input', e => { const el = e.target; if (el.dataset && el.dataset.input && INPUT[el.dataset.input]) INPUT[el.dataset.input](el, e); });
 document.addEventListener('change', e => { const el = e.target; if (el.dataset && el.dataset.change && CHANGE[el.dataset.change]) CHANGE[el.dataset.change](el, e); });
 
-// Balayage horizontal : semaine (bandeau), jour (agenda) ou jour (bilan).
+// Balayage horizontal : semaine (bandeau), jour (agenda) ou jour (bilan). Le contenu suit le doigt.
 let swipe = null;
+function swipeTargets(kind) {
+  const main = $('#main'), t = [...main.querySelectorAll('.slidable')];
+  if (kind === 'agenda-week') t.push(...main.querySelectorAll('.slidable-week'));
+  return t;
+}
 document.addEventListener('touchstart', e => {
   const el = e.target.closest('[data-swipe]');
-  swipe = el && e.touches.length === 1 && !ui.sheetRender ? { el, x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+  swipe = el && e.touches.length === 1 && !ui.sheetRender && !e.target.closest('input, textarea, select')
+    ? { kind: el.dataset.swipe, x: e.touches[0].clientX, y: e.touches[0].clientY, lock: null, dx: 0, targets: [] } : null;
 }, { passive: true });
-document.addEventListener('touchend', e => {
+document.addEventListener('touchmove', e => {
   if (!swipe) return;
-  const t = e.changedTouches[0], dx = t.clientX - swipe.x, dy = t.clientY - swipe.y, kind = swipe.el.dataset.swipe;
+  const dx = e.touches[0].clientX - swipe.x, dy = e.touches[0].clientY - swipe.y;
+  if (!swipe.lock) {
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+    swipe.lock = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    if (swipe.lock === 'x') swipe.targets = swipeTargets(swipe.kind);
+  }
+  if (swipe.lock !== 'x') return;
+  e.preventDefault();
+  swipe.dx = dx;
+  for (const t of swipe.targets) {
+    t.style.transition = 'none';
+    t.style.transform = `translateX(${dx}px)`;
+    t.style.opacity = String(1 - Math.min(Math.abs(dx) / innerWidth, 1) * 0.6);
+  }
+}, { passive: false });
+function endSwipe() {
+  const s = swipe;
   swipe = null;
-  if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.6) return;
-  const dir = dx < 0 ? 1 : -1;
-  if (kind === 'agenda-week') ui.agendaDate = addDays(ui.agendaDate, 7 * dir);
-  else if (kind === 'agenda-day') ui.agendaDate = addDays(ui.agendaDate, dir);
-  else if (kind === 'bilan-day') ui.bilanDate = addDays(ui.bilanDate, dir);
-  if (kind.startsWith('agenda')) ui.scrollHour = true;
-  render();
-}, { passive: true });
+  if (!s || s.lock !== 'x') return;
+  const done = Math.abs(s.dx) > 60, dir = s.dx < 0 ? 1 : -1;
+  for (const t of s.targets) {
+    t.style.transition = 'transform .15s ease-out, opacity .15s ease-out';
+    t.style.transform = done ? `translateX(${-dir * innerWidth * 0.5}px)` : '';
+    t.style.opacity = done ? '0' : '';
+  }
+  if (!done) return;
+  setTimeout(() => {
+    if (s.kind === 'agenda-week') goAgenda(addDays(ui.agendaDate, 7 * dir));
+    else if (s.kind === 'agenda-day') goAgenda(addDays(ui.agendaDate, dir));
+    else if (s.kind === 'bilan-day') goBilan(addDays(ui.bilanDate, dir));
+  }, 140);
+}
+document.addEventListener('touchend', endSwipe, { passive: true });
+document.addEventListener('touchcancel', endSwipe, { passive: true });
 
 // Ligne de l'heure actuelle et changement de jour.
 let lastDay = dkey(new Date());
@@ -1299,7 +1350,7 @@ fitScreen();
 addEventListener('resize', fitScreen);
 // La page elle-même ne défile pas, sauf pendant la saisie (iOS remonte le champ au-dessus du clavier).
 const typing = () => document.activeElement && document.activeElement.matches('input, textarea, select');
-addEventListener('scroll', () => { if (scrollY && !typing()) scrollTo(0, 0); });
+addEventListener('scroll', () => { if ((scrollX || scrollY) && !typing()) scrollTo(0, 0); });
 document.addEventListener('focusout', () => setTimeout(() => { if (!typing()) scrollTo(0, 0); }, 100));
 addEventListener('orientationchange', fitScreen);
 

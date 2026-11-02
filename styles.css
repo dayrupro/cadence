@@ -26,8 +26,9 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
   -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
   overscroll-behavior: none;
-  touch-action: manipulation;
+  touch-action: pan-y; /* la page ne se décale jamais sur le côté ; les balayages sont gérés en JS */
 }
 
 input, textarea, select, button { font: inherit; color: inherit; }
@@ -39,7 +40,7 @@ svg { display: block; }
 /* En mode « écran d'accueil », iOS annonce une hauteur trop courte (sans la barre d'état) et coupe les éléments
    « fixed » à cette hauteur. La page prend donc la hauteur réelle de l'écran (--app-h, calculée en JS) et l'app
    comme les fenêtres s'y placent en position absolue. */
-#app { position: absolute; top: 0; left: 0; right: 0; height: var(--app-h, 100%); display: flex; flex-direction: column; }
+#app { position: absolute; top: 0; left: 0; right: 0; height: var(--app-h, 100%); display: flex; flex-direction: column; overflow: hidden; }
 #main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 /* ---------- En-têtes ---------- */
@@ -202,7 +203,7 @@ input[type=date].input, input[type=time].input { min-height: 52px; text-align: c
 input[type=date]::-webkit-date-and-time-value, input[type=time]::-webkit-date-and-time-value { text-align: center; }
 select.input { background-image: linear-gradient(45deg, transparent 50%, var(--sec) 50%), linear-gradient(135deg, var(--sec) 50%, transparent 50%); background-position: calc(100% - 22px) 50%, calc(100% - 16px) 50%; background-size: 6px 6px; background-repeat: no-repeat; }
 textarea.input { resize: none; line-height: 1.4; }
-.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .hint { font-size: 13px; color: var(--warn); margin-top: 8px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
@@ -359,3 +360,11 @@ textarea.input { resize: none; line-height: 1.4; }
 .steps { margin: 0; padding-left: 20px; color: var(--sec); font-size: 15px; line-height: 1.5; }
 .steps b { color: #fff; }
 input[type=range] { accent-color: #fff; width: 100%; }
+
+/* ---------- Transitions entre jours ---------- */
+@keyframes in-next { from { transform: translateX(30%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes in-prev { from { transform: translateX(-30%); opacity: 0; } to { transform: none; opacity: 1; } }
+.in-next { animation: in-next .3s cubic-bezier(.2, .8, .2, 1); }
+.in-prev { animation: in-prev .3s cubic-bezier(.2, .8, .2, 1); }
+.slide-days { display: flex; flex: 1; min-width: 0; }
+@media (prefers-reduced-motion: reduce) { .in-next, .in-prev { animation: none; } }
