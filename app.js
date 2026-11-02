@@ -1292,11 +1292,15 @@ document.addEventListener('visibilitychange', () => {
 // Lancée depuis l'écran d'accueil, l'app prend toute la hauteur réelle de l'écran.
 function fitScreen() {
   const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
-  const h = standalone && Math.abs(screen.width - innerWidth) < 2 ? Math.max(innerHeight, screen.height) : innerHeight;
+  const h = standalone && Math.abs(screen.width - innerWidth) < 2 ? screen.height : innerHeight;
   document.documentElement.style.setProperty('--app-h', `${h}px`);
 }
 fitScreen();
 addEventListener('resize', fitScreen);
+// La page elle-même ne défile pas, sauf pendant la saisie (iOS remonte le champ au-dessus du clavier).
+const typing = () => document.activeElement && document.activeElement.matches('input, textarea, select');
+addEventListener('scroll', () => { if (scrollY && !typing()) scrollTo(0, 0); });
+document.addEventListener('focusout', () => setTimeout(() => { if (!typing()) scrollTo(0, 0); }, 100));
 addEventListener('orientationchange', fitScreen);
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
