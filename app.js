@@ -513,7 +513,9 @@ function render() {
   main.dataset.tab = ui.tab;
   const sc = main.querySelector('.scroll');
   if (ui.tab === 'agenda' && ui.scrollHour) {
-    sc.scrollTop = Math.max(0, ui.agendaTarget * H + TOP - 4 + (sc.querySelector('.grid') ? sc.querySelector('.grid').offsetTop : 0));
+    const grid = sc.querySelector('.grid');
+    const gridTop = grid.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+    sc.scrollTop = S.events.length ? Math.max(0, gridTop + ui.agendaTarget * H + TOP - 4) : 0;
     ui.scrollHour = false;
   } else if (keep != null) sc.scrollTop = keep;
   document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === ui.tab));

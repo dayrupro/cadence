@@ -1,5 +1,5 @@
 // Hors ligne : on essaie le réseau (pour recevoir les mises à jour), sinon on sert la copie en cache.
-const CACHE = 'cadence-v1';
+const CACHE = 'cadence-v2';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest',
   './icon-180.png', './icon-192.png', './icon-512.png'];
 
