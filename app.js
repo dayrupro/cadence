@@ -1289,5 +1289,15 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+// Lancée depuis l'écran d'accueil, l'app prend toute la hauteur réelle de l'écran.
+function fitScreen() {
+  const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+  const h = standalone && Math.abs(screen.width - innerWidth) < 2 ? Math.max(innerHeight, screen.height) : innerHeight;
+  document.documentElement.style.setProperty('--app-h', `${h}px`);
+}
+fitScreen();
+addEventListener('resize', fitScreen);
+addEventListener('orientationchange', fitScreen);
+
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 render();

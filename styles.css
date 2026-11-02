@@ -18,6 +18,7 @@
 html, body {
   margin: 0;
   height: 100%;
+  overflow: hidden;
   background: var(--bg);
   color: #fff;
   font: 17px/1.3 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
@@ -36,7 +37,8 @@ button:disabled { cursor: default; }
 input[type=text], textarea { -webkit-user-select: text; user-select: text; }
 svg { display: block; }
 
-#app { position: fixed; inset: 0; display: flex; flex-direction: column; }
+/* Hauteur fixée en JS (--app-h) : en mode « écran d'accueil », iOS sous-estime parfois la hauteur et laisse une bande noire en bas. */
+#app { position: fixed; top: 0; left: 0; right: 0; height: var(--app-h, 100%); display: flex; flex-direction: column; }
 #main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 /* ---------- En-têtes ---------- */
@@ -82,7 +84,7 @@ h1 { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -.5px; white-
 /* ---------- Barre d'onglets ---------- */
 .tabbar {
   flex-shrink: 0; display: flex; border-top: 1px solid var(--stroke); background: var(--bg);
-  padding: 7px 0 calc(env(safe-area-inset-bottom) + 4px);
+  padding: 8px 0 max(calc(env(safe-area-inset-bottom) - 12px), 8px);
 }
 .tabbar button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--ter); }
 .tabbar button.on { color: #fff; }
