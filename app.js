@@ -515,7 +515,7 @@ function render() {
   if (ui.tab === 'agenda' && ui.scrollHour) {
     const grid = sc.querySelector('.grid');
     const gridTop = grid.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
-    sc.scrollTop = S.events.length ? Math.max(0, gridTop + ui.agendaTarget * H + TOP - 4) : 0;
+    sc.scrollTop = S.events.length ? Math.max(0, gridTop + ui.agendaTargetY + TOP - 4) : 0;
     ui.scrollHour = false;
   } else if (keep != null) sc.scrollTop = keep;
   const dir = ui.slide, weekDir = ui.slideWeek;
@@ -562,6 +562,81 @@ function layout(items) {
   }
   flush();
   return res;
+}
+
+/* Échelle de temps : liste de repères { t (minutes depuis minuit), y (px) }, interpolée entre deux repères. */
+function linearMap() { return [{ t: 0, y: TOP }, { t: 1440, y: TOP + 24 * H }]; }
+function tToY(pts, m) {
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i - 1], q = pts[i];
+    if (m <= q.t) return q.t === p.t ? q.y : p.y + (q.y - p.y) * (m - p.t) / (q.t - p.t);
+  }
+  return pts[pts.length - 1].y;
+}
+function yToT(pts, y) {
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i - 1], q = pts[i];
+    if (y <= q.y) return q.y === p.y ? q.t : p.t + (q.t - p.t) * (y - p.y) / (q.y - p.y);
+  }
+  return pts[pts.length - 1].t;
+}
+
+// Vue Jour : chaque activité occupe toute la largeur et au moins une ligne lisible (ROW).
+// Les activités qui se chevauchent sont empilées l'une sous l'autre ; l'échelle s'étire localement si besoin.
+const ROW = 32, GAP = 2, LINE = 20;
+const measureCtx = document.createElement('canvas').getContext('2d');
+function textWidth(text, font) {
+  measureCtx.font = `${font} -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif`;
+  return measureCtx.measureText(text).width;
+}
+// Hauteur minimale pour lire tout le titre : une ligne si titre + heure tiennent, sinon le titre passe à la ligne.
+function bandNeed(o, stacked) {
+  const avail = $('#main').clientWidth - 56 - 8 - 4 - 24 - 20;
+  const time = stacked ? `${hm(o.start)} – ${hm(o.end)}` : hm(o.start);
+  if (textWidth(o.title, '600 15px') + 10 + textWidth(time, '400 15px') <= avail) return { h: ROW, oneLine: true };
+  const lines = Math.min(4, Math.ceil(textWidth(o.title, '600 16px') / avail));
+  return { h: 14 + lines * LINE + 20, oneLine: false };
+}
+function dayLayout(items, s0) {
+  const evs = items.map(it => {
+    const a = (it.ds - s0) / 60000;
+    return { o: it.o, a, b: Math.max((it.de - s0) / 60000, a) };
+  }).sort((x, y) => x.a - y.a || y.b - x.b);
+  const clusters = [];
+  for (const e of evs) {
+    const c = clusters[clusters.length - 1];
+    if (c && e.a < c.b) { c.items.push(e); c.b = Math.max(c.b, e.b); }
+    else clusters.push({ a: e.a, b: e.b, items: [e] });
+  }
+  const px = m => m / 60 * H, pts = [{ t: 0, y: TOP }], bands = [];
+  let y = TOP, t = 0;
+  for (const c of clusters) {
+    if (c.a > t) { y += px(c.a - t); t = c.a; pts.push({ t, y }); }
+    // Chaque activité garde au moins la hauteur de sa propre durée : seul le chevauchement étire l'échelle.
+    const n = c.items.length, mins = c.items.map(e => { const m = bandNeed(e.o, n > 1); return { ...m, h: Math.max(m.h, px(e.b - e.a) - GAP) }; });
+    const need = mins.reduce((x, m) => x + m.h, 0) + (n - 1) * GAP, h = Math.max(px(c.b - c.a), need);
+    const weights = c.items.map(e => Math.max(e.b - e.a, 1)), total = weights.reduce((x, w) => x + w, 0);
+    let by = y;
+    c.items.forEach((e, i) => {
+      const bh = mins[i].h + (h - need) * weights[i] / total;
+      bands.push({ o: e.o, y: by, h: bh, stacked: n > 1, oneLine: mins[i].oneLine });
+      by += bh + GAP;
+    });
+    y += h;
+    t = c.b;
+    pts.push({ t, y });
+  }
+  if (t < 1440) pts.push({ t: 1440, y: y + px(1440 - t) });
+  return { pts, bands };
+}
+function bandHTML(b) {
+  const o = b.o, c = cat(o.cat), h = b.h - GAP;
+  const e = getLog(dkey(o.start)).entries[o.id], st = e ? e.s : '';
+  const short = h < 50 && b.oneLine;
+  const mark = st ? `<em class="st ${st}"></em>` : '';
+  const time = short && !b.stacked ? hm(o.start) : `${hm(o.start)} – ${hm(o.end)}`;
+  return `<div class="ev band ${o.cat}${short ? ' short' : ''}${st ? ' ' + st : ''}" data-act="open-occ" data-id="${esc(o.id)}" ` +
+    `style="--c:${c.color};top:${b.y}px;height:${h}px"><b>${esc(o.title)}</b><span>${time}</span>${mark}</div>`;
 }
 
 function evHTML(p, s0, compact) {
@@ -617,25 +692,33 @@ function renderAgenda() {
       `<button class="adev" style="--c:${cat(o.cat).color}" data-act="open-occ" data-id="${esc(o.id)}">${esc(o.title)}</button>`).join('')}</div>`).join('')}</div></div>`;
   }
 
-  let grid = `<div class="grid" style="height:${24 * H + 2 * TOP}px">`;
-  for (let h = 0; h <= 24; h++) grid += `<div class="hour" style="top:${TOP + h * H - 8}px"><span>${pad(h % 24)}:00</span><i></i></div>`;
+  const dayItems = day => {
+    const s0 = sod(day), s1 = addDays(s0, 1);
+    return occ.filter(o => !o.allDay && ((o.end > s0 && o.start < s1) || (+o.start === +o.end && o.start >= s0 && o.start < s1)))
+      .map(o => ({ o, ds: Math.max(+o.start, +s0), de: Math.min(+o.end, +s1) }));
+  };
+  const elastic = week ? null : dayLayout(dayItems(d), +sod(d));
+  const pts = elastic ? elastic.pts : linearMap();
+  ui.timeMap = pts;
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  let grid = `<div class="grid" style="height:${pts[pts.length - 1].y + TOP}px">`;
+  for (let h = 0; h <= 24; h++) grid += `<div class="hour" style="top:${tToY(pts, h * 60) - 8}px"><span>${pad(h % 24)}:00</span><i></i></div>`;
   grid += '<div class="cols">';
   let target = 8, firstStart = null;
   days.forEach((day, i) => {
-    const s0 = sod(day), s1 = addDays(s0, 1);
-    const items = occ.filter(o => !o.allDay && ((o.end > s0 && o.start < s1) || (+o.start === +o.end && o.start >= s0 && o.start < s1)))
-      .map(o => ({ o, ds: Math.max(+o.start, +s0), de: Math.min(+o.end, +s1) }));
+    const s0 = sod(day), items = dayItems(day);
     for (const it of items) if (it.o.start >= s0 && (!firstStart || it.o.start.getHours() < firstStart)) firstStart = it.o.start.getHours();
     grid += `<div class="col" data-act="slot" data-day="${dkey(day)}" style="left:${i * 100 / days.length}%;width:${100 / days.length}%">`;
-    for (const p of layout(items)) grid += evHTML(p, s0, week);
-    if (sameDay(day, t)) grid += `<div class="now" style="top:${yOf(Date.now(), s0)}px"></div>`;
+    if (elastic) for (const b of elastic.bands) grid += bandHTML(b);
+    else for (const p of layout(items)) grid += evHTML(p, s0, true);
+    if (sameDay(day, t)) grid += `<div class="now" style="top:${tToY(pts, nowMin)}px"></div>`;
     grid += '</div>';
   });
   grid += '</div></div>';
   if (!S.events.length) target = 0;
   else if (days.some(x => sameDay(x, t))) target = Math.max(0, new Date().getHours() - 1);
   else if (firstStart != null) target = Math.max(0, firstStart - 1);
-  ui.agendaTarget = target;
+  ui.agendaTargetY = tToY(pts, target * 60) - TOP;
 
   return header('Agenda', right, extra) +
     `<div class="scroll" data-swipe="${week ? 'agenda-week' : 'agenda-day'}"><div class="slidable">${body}${grid}${legend()}</div></div>`;
@@ -824,7 +907,7 @@ function actRow(a, e, locked) {
   let partial = '';
   if (st === 'partial') {
     const r = realized(a, e);
-    partial = `<div class="partial"><span>Réalisé</span><input type="range" min="0" max="${Math.max(mins(a), 5)}" step="5" value="${r}" ` +
+    partial = `<div class="prow"><span>Réalisé</span><input type="range" min="0" max="${Math.max(mins(a), 5)}" step="5" value="${r}" ` +
       `data-input="partial" data-change="rerender" data-id="${esc(a.id)}"${locked ? ' disabled' : ''}><output>${fmtDur(r)}</output></div>`;
   }
   return `<div class="act"><div class="act-top"><div class="times"><span>${hm(a.start)}</span><span>${hm(a.end)}</span></div>` +
@@ -1101,8 +1184,8 @@ const A = {
     openEvent(newDraft(d, m));
   },
   slot: (el, e) => {
-    const y = e.clientY - el.getBoundingClientRect().top - TOP;
-    const m = Math.min(Math.max(Math.floor(y / H * 2) * 30, 0), 23 * 60);
+    const y = e.clientY - el.getBoundingClientRect().top;
+    const m = Math.min(Math.max(Math.floor(yToT(ui.timeMap || linearMap(), y) / 30) * 30, 0), 23 * 60);
     openEvent(newDraft(parseKey(el.dataset.day), m));
   },
   'draft-cat': el => { ui.draft.cat = el.dataset.cat; refreshSheet(); },
@@ -1329,7 +1412,7 @@ let lastDay = dkey(new Date());
 setInterval(() => {
   if (dkey(new Date()) !== lastDay) { lastDay = dkey(new Date()); if (!ui.sheetRender) render(); return; }
   const now = document.querySelector('.now');
-  if (now) now.style.top = `${yOf(Date.now(), today())}px`;
+  if (now) { const n = new Date(); now.style.top = `${tToY(ui.timeMap || linearMap(), n.getHours() * 60 + n.getMinutes())}px`; }
 }, 60000);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && dkey(new Date()) !== lastDay) {
