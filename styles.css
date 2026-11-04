@@ -2,6 +2,9 @@
 
 :root {
   color-scheme: dark;
+  /* Marges de sécurité du haut (encoche) et du bas (barre d'accueil), côté contenu. */
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
   --bg: #0a0b0f;
   --sheet: #121318;
   --card: #16171c;
@@ -46,7 +49,7 @@ svg { display: block; }
 /* ---------- En-têtes ---------- */
 .head {
   flex-shrink: 0;
-  padding: calc(env(safe-area-inset-top) + 10px) 20px 12px;
+  padding: calc(var(--sat) + 10px) 20px 12px;
   border-bottom: 1px solid var(--stroke);
   display: flex;
   flex-direction: column;
@@ -86,7 +89,7 @@ h1 { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -.5px; white-
 /* ---------- Barre d'onglets ---------- */
 .tabbar {
   flex-shrink: 0; display: flex; border-top: 1px solid var(--stroke); background: var(--bg);
-  padding: 8px 0 max(calc(env(safe-area-inset-bottom) - 12px), 8px);
+  padding: 8px 0 max(calc(var(--sab) - 12px), 8px);
 }
 .tabbar button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--ter); }
 .tabbar button.on { color: #fff; }
@@ -183,9 +186,9 @@ h1 { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -.5px; white-
 }
 .backdrop.open { background: rgba(0, 0, 0, .6); }
 .sheet {
-  width: 100%; max-height: calc(100% - env(safe-area-inset-top) - 24px); overflow-y: auto; -webkit-overflow-scrolling: touch;
+  width: 100%; max-height: calc(100% - var(--sat) - 24px); overflow-y: auto; -webkit-overflow-scrolling: touch;
   background: var(--sheet); border-radius: 24px 24px 0 0; border-top: 1px solid var(--stroke);
-  padding: 10px 20px calc(env(safe-area-inset-bottom) + 28px);
+  padding: 10px 20px calc(var(--sab) + 28px);
   transform: translateY(100%); transition: transform .3s cubic-bezier(.2, .8, .2, 1);
   overscroll-behavior: contain;
 }
@@ -230,7 +233,7 @@ textarea.input { resize: none; line-height: 1.4; }
 .stepper button svg { width: 18px; height: 18px; }
 .stepper b { flex: 1; text-align: center; font-size: 20px; font-variant-numeric: tabular-nums; }
 
-.actions { width: 100%; padding: 0 10px calc(env(safe-area-inset-bottom) + 10px); display: flex; flex-direction: column; gap: 8px; transform: translateY(100%); transition: transform .25s; }
+.actions { width: 100%; padding: 0 10px calc(var(--sab) + 10px); display: flex; flex-direction: column; gap: 8px; transform: translateY(100%); transition: transform .25s; }
 .backdrop.open .actions { transform: none; }
 .actions p { margin: 0; padding: 14px 16px; background: #1e2027; border-radius: 14px; text-align: center; color: var(--sec); font-size: 14px; }
 .actions button { background: #1e2027; min-height: 56px; padding: 8px 14px; border-radius: 14px; font-weight: 600; font-size: 16px; color: #6ea4ff; }
@@ -238,7 +241,7 @@ textarea.input { resize: none; line-height: 1.4; }
 .actions button.cancel { font-weight: 700; margin-top: 4px; color: #fff; }
 
 #toast {
-  position: absolute; left: 50%; top: calc(var(--app-h, 100vh) - env(safe-area-inset-bottom) - 130px); transform: translate(-50%, 20px);
+  position: absolute; left: 50%; top: calc(var(--app-h, 100vh) - var(--sab) - 130px); transform: translate(-50%, 20px);
   background: #2a2c34; padding: 12px 18px; border-radius: 14px; font-size: 15px; font-weight: 600;
   opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 80; max-width: calc(100% - 40px); text-align: center;
 }
@@ -374,3 +377,11 @@ input[type=range] { accent-color: #fff; width: 100%; }
 .ev.band:not(.short) b { white-space: normal; overflow: visible; line-height: 20px; }
 .ev.band.short b { flex: 0 1 auto; }
 .ev.band.short span { flex: none; }
+
+/* ---------- Portrait forcé ----------
+   iOS ignore le verrouillage d'orientation des web apps : en paysage, la page pivote d'un quart de tour
+   dans l'autre sens pour rester droite par rapport au téléphone (sens et dimensions posés en JS). */
+html.rot { height: 100%; overflow: hidden; touch-action: manipulation; }
+html.rot body { position: absolute; top: 0; left: 0; width: var(--app-w); height: var(--app-h); overflow: hidden; touch-action: manipulation; transform-origin: 0 0; }
+html.rot-l { --sat: env(safe-area-inset-left); --sab: env(safe-area-inset-right); }
+html.rot-r { --sat: env(safe-area-inset-right); --sab: env(safe-area-inset-left); }

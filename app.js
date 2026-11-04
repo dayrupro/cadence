@@ -1184,7 +1184,7 @@ const A = {
     openEvent(newDraft(d, m));
   },
   slot: (el, e) => {
-    const y = e.clientY - el.getBoundingClientRect().top;
+    const y = e.target === el ? e.offsetY : e.clientY - el.getBoundingClientRect().top; // offsetY : repère de l'app, même pivotée
     const m = Math.min(Math.max(Math.floor(yToT(ui.timeMap || linearMap(), y) / 30) * 30, 0), 23 * 60);
     openEvent(newDraft(parseKey(el.dataset.day), m));
   },
@@ -1372,7 +1372,7 @@ document.addEventListener('touchstart', e => {
 }, { passive: true });
 document.addEventListener('touchmove', e => {
   if (!swipe) return;
-  const dx = e.touches[0].clientX - swipe.x, dy = e.touches[0].clientY - swipe.y;
+  const { dx, dy } = contentDelta(e.touches[0].clientX - swipe.x, e.touches[0].clientY - swipe.y);
   if (!swipe.lock) {
     if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
     swipe.lock = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
@@ -1384,7 +1384,7 @@ document.addEventListener('touchmove', e => {
   for (const t of swipe.targets) {
     t.style.transition = 'none';
     t.style.transform = `translateX(${dx}px)`;
-    t.style.opacity = String(1 - Math.min(Math.abs(dx) / innerWidth, 1) * 0.6);
+    t.style.opacity = String(1 - Math.min(Math.abs(dx) / contentWidth(), 1) * 0.6);
   }
 }, { passive: false });
 function endSwipe() {
@@ -1394,7 +1394,7 @@ function endSwipe() {
   const done = Math.abs(s.dx) > 60, dir = s.dx < 0 ? 1 : -1;
   for (const t of s.targets) {
     t.style.transition = 'transform .15s ease-out, opacity .15s ease-out';
-    t.style.transform = done ? `translateX(${-dir * innerWidth * 0.5}px)` : '';
+    t.style.transform = done ? `translateX(${-dir * contentWidth() * 0.5}px)` : '';
     t.style.opacity = done ? '0' : '';
   }
   if (!done) return;
@@ -1424,13 +1424,41 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Lancée depuis l'écran d'accueil, l'app prend toute la hauteur réelle de l'écran.
-function fitScreen() {
+// Sur téléphone en paysage, elle pivote pour rester en portrait (iOS ne permet pas de bloquer la rotation).
+function fitScreen(force) {
+  const root = document.documentElement, body = document.body;
+  const phone = navigator.maxTouchPoints > 0 && Math.min(innerWidth, innerHeight) < 600;
+  ui.rot = 0;
+  if (force || (phone && innerWidth > innerHeight)) {
+    const a = screen.orientation && typeof screen.orientation.angle === 'number' ? screen.orientation.angle : window.orientation;
+    ui.rot = force || (a === 270 || a === -90 ? 90 : -90);
+  }
+  root.classList.toggle('rot', !!ui.rot);
+  root.classList.toggle('rot-l', ui.rot < 0);
+  root.classList.toggle('rot-r', ui.rot > 0);
+  if (ui.rot) {
+    const w = innerHeight, h = innerWidth; // dimensions du portrait affiché
+    root.style.setProperty('--app-w', `${w}px`);
+    root.style.setProperty('--app-h', `${h}px`);
+    body.style.transform = ui.rot < 0 ? `translate(0, ${w}px) rotate(-90deg)` : `translate(${h}px, 0) rotate(90deg)`;
+    return;
+  }
+  body.style.transform = '';
   const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
   const h = standalone && Math.abs(screen.width - innerWidth) < 2 ? screen.height : innerHeight;
-  document.documentElement.style.setProperty('--app-h', `${h}px`);
+  root.style.setProperty('--app-h', `${h}px`);
 }
+// Déplacement du doigt exprimé dans le repère de l'app (qui peut être pivotée).
+function contentDelta(dx, dy) {
+  if (ui.rot < 0) return { dx: -dy, dy: dx };
+  if (ui.rot > 0) return { dx: dy, dy: -dx };
+  return { dx, dy };
+}
+function contentWidth() { return document.body.clientWidth || innerWidth; }
 fitScreen();
-addEventListener('resize', fitScreen);
+addEventListener('resize', () => fitScreen());
+addEventListener('orientationchange', () => setTimeout(() => fitScreen(), 50));
+if (screen.orientation) screen.orientation.addEventListener('change', () => setTimeout(() => fitScreen(), 50));
 // La page elle-même ne défile pas, sauf pendant la saisie (iOS remonte le champ au-dessus du clavier).
 const typing = () => document.activeElement && document.activeElement.matches('input, textarea, select');
 addEventListener('scroll', () => { if ((scrollX || scrollY) && !typing()) scrollTo(0, 0); });
